@@ -10,8 +10,8 @@
 // is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS
 // OF ANY KIND, either express or implied; not even the implied warranty
 // of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-// 
-// 
+//
+//
 // The TagSoup parser
 
 package org.ccil.cowan.tagsoup;
@@ -53,8 +53,9 @@ public class Parser extends DefaultHandler implements ScanHandler, XMLReader, Le
 	private static boolean DEFAULT_IGNORABLE_WHITESPACE = false;
 	private static boolean DEFAULT_CDATA_ELEMENTS = true;
 
-	// Feature flags.  
+	// Feature flags.
 
+        private boolean suppressNamespaces = false; // 1.2.2-suppress-namespaces
 	private boolean namespaces = DEFAULT_NAMESPACES;
 	private boolean ignoreBogons = DEFAULT_IGNORE_BOGONS;
 	private boolean bogonsEmpty = DEFAULT_BOGONS_EMPTY;
@@ -64,6 +65,19 @@ public class Parser extends DefaultHandler implements ScanHandler, XMLReader, Le
 	private boolean restartElements = DEFAULT_RESTART_ELEMENTS;
 	private boolean ignorableWhitespace = DEFAULT_IGNORABLE_WHITESPACE;
 	private boolean CDATAElements = DEFAULT_CDATA_ELEMENTS;
+
+        /**
+        (For 1.2.2-suppress-namespaces fork)
+        A value of "true" disables namespace reporting in a way that maintains
+        compatibility with applications that expect a namespace aware parser.
+        Specifically, the namespace of elements is reported as "", and the
+        localname is reported as same as QName. Also, it suppresses tagsoup's
+        default behavior of sending startPrefixMapping and endPrefixMapping
+        events for the mapping of prefix 'html' to namespace
+        'http://www.w3.org/1999/xhtml'.
+        **/
+    	public final static String suppressNamespacesFeature =
+            	"http://www.ccil.org/~cowan/tagsoup/features/suppress-namespaces";
 
 	/**
 	A value of "true" indicates namespace URIs and unprefixed local
@@ -214,21 +228,21 @@ public class Parser extends DefaultHandler implements ScanHandler, XMLReader, Le
 		"http://www.ccil.org/~cowan/tagsoup/features/default-attributes";
 
 	/**
-	A value of "true" indicates that the parser will 
+	A value of "true" indicates that the parser will
 	translate colons into underscores in names.
 	**/
 	public final static String translateColonsFeature =
 		"http://www.ccil.org/~cowan/tagsoup/features/translate-colons";
 
 	/**
-	A value of "true" indicates that the parser will 
+	A value of "true" indicates that the parser will
 	attempt to restart the restartable elements.
 	**/
 	public final static String restartElementsFeature =
 		"http://www.ccil.org/~cowan/tagsoup/features/restart-elements";
 
 	/**
-	A value of "true" indicates that the parser will 
+	A value of "true" indicates that the parser will
 	transmit whitespace in element-only content via the SAX
 	ignorableWhitespace callback.  Normally this is not done,
 	because HTML is an SGML application and SGML suppresses
@@ -280,6 +294,7 @@ public class Parser extends DefaultHandler implements ScanHandler, XMLReader, Le
 
 	private HashMap theFeatures = new HashMap();
 	{
+              	theFeatures.put(suppressNamespacesFeature, Boolean.FALSE); // 1.2.2-suppress-namespaces
 		theFeatures.put(namespacesFeature, truthValue(DEFAULT_NAMESPACES));
 		theFeatures.put(namespacePrefixesFeature, Boolean.FALSE);
 		theFeatures.put(externalGeneralEntitiesFeature, Boolean.FALSE);
@@ -328,10 +343,19 @@ public class Parser extends DefaultHandler implements ScanHandler, XMLReader, Le
 		if (b == null) {
 			throw new SAXNotRecognizedException("Unknown feature " + name);
 			}
+
 		if (value) theFeatures.put(name, Boolean.TRUE);
 		else theFeatures.put(name, Boolean.FALSE);
 
-		if (name.equals(namespacesFeature)) namespaces = value;
+                if (name.equals(suppressNamespacesFeature)) {
+                   suppressNamespaces = value;
+                   if (suppressNamespaces) {
+                      theFeatures.put(namespacesFeature, Boolean.FALSE);
+                      namespaces = false;
+                   }
+                }
+                else if (name.equals(namespacesFeature) && !suppressNamespaces) namespaces = value;
+                else if (name.equals(ignoreBogonsFeature)) ignoreBogons = value;
 		else if (name.equals(ignoreBogonsFeature)) ignoreBogons = value;
 		else if (name.equals(bogonsEmptyFeature)) bogonsEmpty = value;
 		else if (name.equals(rootBogonsFeature)) rootBogons = value;
@@ -443,7 +467,7 @@ public class Parser extends DefaultHandler implements ScanHandler, XMLReader, Le
 		if (theScanner instanceof Locator) {
 			theContentHandler.setDocumentLocator((Locator)theScanner);
 			}
-		if (!(theSchema.getURI().equals("")))
+		if (!suppressNamespaces && !(theSchema.getURI().equals("")))
 			theContentHandler.startPrefixMapping(theSchema.getPrefix(),
 				theSchema.getURI());
 		theScanner.scan(r, this);
@@ -634,7 +658,7 @@ public class Parser extends DefaultHandler implements ScanHandler, XMLReader, Le
 		while (theStack.next() != null) {
 			pop();
 			}
-		if (!(theSchema.getURI().equals("")))
+		if (!suppressNamespaces && !(theSchema.getURI().equals("")))
 			theContentHandler.endPrefixMapping(theSchema.getPrefix());
 		theContentHandler.endDocument();
 		}
@@ -733,6 +757,7 @@ public class Parser extends DefaultHandler implements ScanHandler, XMLReader, Le
 
 //		System.err.println("%% Popping " + name);
 		if (!namespaces) namespace = localName = "";
+		if (suppressNamespaces) { namespace = ""; localName = name; } // 1.2.2-suppress-namespaces
 		theContentHandler.endElement(namespace, localName, name);
 		if (foreign(prefix, namespace)) {
 			theContentHandler.endPrefixMapping(prefix);
@@ -772,6 +797,8 @@ public class Parser extends DefaultHandler implements ScanHandler, XMLReader, Le
 //		System.err.println("%% Pushing " + name);
 		e.clean();
 		if (!namespaces) namespace = localName = "";
+		if (suppressNamespaces) { namespace = ""; localName = name; } // 1.2.2-suppress-namespaces
+
                 if (virginStack && localName.equalsIgnoreCase(theDoctypeName)) {
                     try {
                         theEntityResolver.resolveEntity(theDoctypePublicId, theDoctypeSystemId);

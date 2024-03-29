@@ -1,3 +1,21 @@
+  1.2.2-suppress-namespaces fork
+
+    This fork adds the following SAX feature:
+
+    http://www.ccil.org/~cowan/tagsoup/features/suppress-namespaces
+
+    Default value is "false".
+
+    A value of "true" disables namespace reporting in a way that maintains
+    compatibility with applications that expect a namespace aware parser.
+    Specifically, the namespace of elements is reported as "", and the
+    localname is reported as same as QName. Also, it suppresses tagsoup's
+    default behavior of sending startPrefixMapping and endPrefixMapping events
+    for mapping 'html' to namespace 'http://www.w3.org/1999/xhtml'.
+
+
+  Original documentation follows:
+
     [TagSoupLogo32.png] TagSoup - Just Keep On Truckin' [TagSoupLogo32.png]
 
   Index
